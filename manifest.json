@@ -8,12 +8,12 @@
     "background": {"persistent": false, "scripts": ["scripts/md5.js", "scripts/background.js"]},
     "content_scripts": [
         {
-          "matches": ["http://*/*", "https://*/*", "file://*"],
+          "matches": ["http://*/*", "https://*/*", "file:///.*"],
           "js": ["scripts/content.js"],
           "css": ["css/style.css", "css/fontawesome-all.css"]
         }
       ],
     "default_locale": "en",
-    "permissions": ["alarms", "downloads", "tabs", "downloads.open", "http://*/*", "https://*/*", "file://*"], 
+    "permissions": ["alarms", "downloads", "tabs", "downloads.open", "http://*/*", "https://*/*", "file:///.*"], 
     "web_accessible_resources": ["css/*", "scripts/*", "webfonts/*", "icons/*"]
 }
