@@ -1,16 +1,3 @@
-// Remove all previous alarms when a new background is started
-chrome.alarms.clearAll();
-
-/**
- * Verify if extension install is correct. If URL file access is not allowed, instructions are displayed in a new tab
- */
-chrome.extension.isAllowedFileSchemeAccess(function (isAllowed) {
-    if (!isAllowed) {
-        chrome.tabs.create({url: chrome.extension.getURL("settings/" + chrome.i18n.getMessage("lang") + "/instructions.html")}, function () {
-        })
-    }
-});
-
 /**
  * Listen to messages coming from content script
  */
@@ -114,23 +101,4 @@ chrome.downloads.onChanged.addListener(function (download) {
             chrome.storage.local.set({downloads: downloads});
         }
     });
-});
-
-function keepAlive() {
-    console.debug("Background request to keep alive");
-    chrome.alarms.create("keepAlive", {when: Date.now() + 1000});
-}
-
-// Keep alive the background script as long as there is download to monitor.
-chrome.alarms.onAlarm.addListener(function (alarm) {
-    let completed = true;
-    // Verify that all downloads are completed
-    for (let key in downloads) {
-        completed = completed && downloads[key].completed;
-    }
-
-    // if a keep alive alarm was received an not all dangerous download are finished, keep alive for one more second
-    if (alarm.name === "keepAlive" && !completed) {
-        keepAlive();
-    }
 });
