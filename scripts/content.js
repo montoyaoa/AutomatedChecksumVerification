@@ -296,21 +296,6 @@ chrome.runtime.onMessage.addListener(function (request) {
                 }
             });
             break;  
-        case "verifying":
-            if (request.valid) {
-                highlightPattern(document.body, new RegExp(request.checksum_value_computed.join('|'), "gi"));
-                title.innerHTML = chrome.i18n.getMessage("contentPopupTitleSafe");
-                status.innerHTML = chrome.i18n.getMessage("popupStatusValid");
-            } else {
-                title.innerHTML = chrome.i18n.getMessage("contentPopupTitleUnsafe");
-                status.innerHTML = chrome.i18n.getMessage("popupStatusInvalid");
-                //shadow.getElementById("adanger").onclick = openPrivateTab;
-                shadow.getElementById("delete").onclick = function () {
-                    deleteFile(request.id)
-                };
-            }
-            mask.style.display = 'block';
-            break;
         case "deleted":
             status.innerHTML = chrome.i18n.getMessage("popupStatusDeleted");
             mask.style.display = 'block';
@@ -327,7 +312,7 @@ chrome.runtime.onMessage.addListener(function (request) {
 async function verifyFile(file, checksum, downloadId) {
     let mask = shadow.getElementById('mask');
     let status = shadow.getElementById('status');
-    
+
     // Implement the "computing" style.
     title.innerHTML = chrome.i18n.getMessage("popupTitle");
     status.innerHTML = chrome.i18n.getMessage("popupDetails") + chrome.i18n.getMessage("popupStatusComputing");
