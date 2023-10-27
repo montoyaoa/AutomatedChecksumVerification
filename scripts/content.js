@@ -199,7 +199,7 @@ let content = document.createElement("div");
 content.className = 'content';
 content.innerHTML = '<p id="details"><p><p id="status">' +
     chrome.i18n.getMessage("contentPopupStatus") +
-    '<img src="' + chrome.extension.getURL("icons/icon16.png") + '" alt="Icon of the plugin"></p>';
+    '<img src="' + chrome.runtime.getURL("icons/icon16.png") + '" alt="Icon of the plugin"></p>';
 
 content.appendChild(fileInput);
 content.appendChild(uploadButton);
