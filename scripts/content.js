@@ -3,6 +3,12 @@ const CHECKSUM_VALUE_SIZE = [32, 40, 56, 64, 96, 128];
 const REGEXP_CHECKSUM_ALGO = /((sha|SHA)(-)?(1|256|2|384|512)|((md|MD)5))/g;
 const DANGEROUS_EXTENSIONS = ["dmg", "exe", "msi", "pkg", "iso", "zip", "tar.xz", "tar.gz", "tar.bz2", "tar", "deb", "rpm"];
 
+const CHECKSUM_TYPE_MD5 = 'md5';
+const CHECKSUM_TYPE_SHA1 = 'sha1';
+const CHECKSUM_TYPE_SHA256 = 'sha256';
+const CHECKSUM_TYPE_SHA384 = 'sha384';
+const CHECKSUM_TYPE_SHA512 = 'sha512';
+
 const MSG_HIDE = '<span id="msg_hide" style="width: 100%; float: right;"><i class="fas fa-times" style="color: rgb(95, 99, 105);"></i></span>';
 const CLASS_HIGHLIGHTED_CHECKSUM = "highlighted_checksum";
 
@@ -173,6 +179,18 @@ hide_link.onclick = makeHideFunction(mask);
 popup_head.appendChild(unil_logo);
 popup_head.appendChild(hide_link);
 
+let fileInput = document.createElement("input");
+fileInput.type = "file";
+fileInput.id = "fileUpload";
+fileInput.style.display = "none";
+
+let uploadButton = document.createElement("button");
+uploadButton.innerHTML = "Upload for Verification";
+uploadButton.style.display = "none";
+uploadButton.onclick = function() {
+    fileInput.click();
+};
+
 let title = document.createElement("div");
 title.className = 'title';
 title.innerHTML = chrome.i18n.getMessage("contentPopupTitle");
@@ -182,6 +200,9 @@ content.className = 'content';
 content.innerHTML = '<p id="details"><p><p id="status">' +
     chrome.i18n.getMessage("contentPopupStatus") +
     '<img src="' + chrome.extension.getURL("icons/icon16.png") + '" alt="Icon of the plugin"></p>';
+
+content.appendChild(fileInput);
+content.appendChild(uploadButton);
 
 popup.appendChild(popup_head);
 popup.appendChild(title);
@@ -262,11 +283,19 @@ chrome.runtime.onMessage.addListener(function (request) {
             status.innerHTML = chrome.i18n.getMessage("popupDetails") + chrome.i18n.getMessage("popupStatusDownloading");
             mask.style.display = 'block';
             break;
-        case "computing":
-            title.innerHTML = chrome.i18n.getMessage("popupTitle");
-            status.innerHTML = chrome.i18n.getMessage("popupDetails") + chrome.i18n.getMessage("popupStatusComputing");
+        case "downloadComplete":
+            // Hardcoded values for prototyping.
+            title.innerHTML = "Checksum Verification";
+            status.innerHTML = "Please upload the downloaded file for verification.";
+            uploadButton.style.display = "block";
             mask.style.display = 'block';
-            break;
+
+            fileInput.addEventListener("change", handleFileChange = function() {
+                if (this.files.length > 0) {
+                    verifyFile(this.files[0], request.checksum, request.downloadId); 
+                }
+            });
+            break;  
         case "verifying":
             if (request.valid) {
                 highlightPattern(document.body, new RegExp(request.checksum_value_computed.join('|'), "gi"));
@@ -294,5 +323,110 @@ chrome.runtime.onMessage.addListener(function (request) {
             return;
     }
 });
+
+async function verifyFile(file, checksum, downloadId) {
+    // Implement the "computing" style.
+    title.innerHTML = chrome.i18n.getMessage("popupTitle");
+    status.innerHTML = chrome.i18n.getMessage("popupDetails") + chrome.i18n.getMessage("popupStatusComputing");
+    mask.style.display = 'block';
+
+    console.debug("Uploaded file name:", file.name);
+    console.debug("Uploaded file size:", file.size + " bytes");
+
+    // Read the file as an ArrayBuffer.
+    const fileData = await readFileAsArrayBuffer(file);
+
+    // Store the checksum data as local variables.
+    const checksum_types = checksum.type;
+    const checksum_value_actual = new Set(checksum.value);
+    const checksum_value_computed = new Set();
+
+    let checksum_result;
+    // For all types of checksum algorithms detected on the page,
+    for (let checksum_type of checksum_types) {
+        // calculate those checksums according to that algorithm on the given file.
+        switch (checksum_type.toLowerCase().replace('-', '')) {
+            case CHECKSUM_TYPE_MD5:
+                console.debug("md5");
+                checksum_result = md5.hex(fileData);
+                break;
+            case CHECKSUM_TYPE_SHA1:
+                console.debug("sha1");
+                checksum_result = await hash("SHA-1", fileData);
+                break;
+            case CHECKSUM_TYPE_SHA256:
+                console.debug("sha2");
+                checksum_result = await hash("SHA-256", fileData);
+                break;
+            case CHECKSUM_TYPE_SHA384:
+                console.debug("sha384");
+                checksum_result = await hash("SHA-384", fileData);
+                break;
+            case CHECKSUM_TYPE_SHA512:
+                console.debug("sha512");
+                checksum_result = await hash("SHA-512", fileData);
+                break;
+            default:
+                console.debug("An error has occured while computing the checksum: Unknown checksum type '" + checksum_type + "'");
+                continue;
+        }
+        // Store the computed checksum
+        checksum_value_computed.add(checksum_result);
+    }
+    // The checksums are valid if the given and computed checksums match.
+    const valid = new Set([...checksum_value_computed].filter(x => checksum_value_actual.has(x))).size > 0;
+
+    console.debug(checksum_value_actual);
+    console.debug(checksum_value_computed)
+    console.debug(valid);
+
+    // If they are valid,
+    if (valid) {
+        // Apply the "safe" styling to the popup.
+        highlightPattern(document.body, new RegExp([...checksum_value_computed].join('|'), "gi"));
+        title.innerHTML = chrome.i18n.getMessage("contentPopupTitleSafe");
+        status.innerHTML = chrome.i18n.getMessage("popupStatusValid");
+    // Otherwise,
+    } else {
+        // Apply the "unsafe" styling to the popup.
+        title.innerHTML = chrome.i18n.getMessage("contentPopupTitleUnsafe");
+        status.innerHTML = chrome.i18n.getMessage("popupStatusInvalid");
+        //shadow.getElementById("adanger").onclick = openPrivateTab;
+        // If the user wants to delete the file,
+        shadow.getElementById("delete").onclick = function () {
+            // delete the file.
+            deleteFile(downloadId);
+        };
+    }
+    mask.style.display = 'block';
+
+    // Get the downloads array from local storage
+    chrome.storage.local.get(['downloads'], function(result) {
+        let downloads = result.downloads || {};
+        if (downloadId in downloads) {
+            // Remove this download from the array as it must have completed to reach verification.
+            delete downloads[downloadId];
+            // Store the updated downloads array back to local storage.
+            chrome.storage.local.set({downloads: downloads});
+        }
+    });
+}
+
+// Reads the file as an array buffer.
+function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = event => resolve(event.target.result);
+        reader.onerror = error => reject(error);
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+// Compute SHA digest for the downloaded file
+function hash(algo, buffer) {
+    return crypto.subtle.digest(algo, buffer).then(function (hash) {
+        return Array.from(new Uint8Array(hash)).map(b => ('00' + b.toString(16)).slice(-2)).join('');
+    });
+}
 
 

@@ -1,9 +1,3 @@
-const CHECKSUM_TYPE_MD5 = 'md5';
-const CHECKSUM_TYPE_SHA1 = 'sha1';
-const CHECKSUM_TYPE_SHA256 = 'sha256';
-const CHECKSUM_TYPE_SHA384 = 'sha384';
-const CHECKSUM_TYPE_SHA512 = 'sha512';
-
 // Remove all previous alarms when a new background is started
 chrome.alarms.clearAll();
 
@@ -82,7 +76,7 @@ chrome.downloads.onCreated.addListener(function (downloadItem) {
                     tab: link.tab,
                     completed: false
                 };
-                // Store the updated download array back to local storage.
+                // Store the updated downloads array back to local storage.
                 chrome.storage.local.set({downloads: downloads}, function() {
                     console.debug("Updated state of downloads after addition:", downloads);
                 });
@@ -121,13 +115,6 @@ chrome.downloads.onChanged.addListener(function (download) {
         }
     });
 });
-
-// Compute SHA digest for the downloaded file
-function hash(algo, buffer) {
-    return crypto.subtle.digest(algo, buffer).then(function (hash) {
-        return Array.from(new Uint8Array(hash)).map(b => ('00' + b.toString(16)).slice(-2)).join('');
-    });
-}
 
 function keepAlive() {
     console.debug("Background request to keep alive");
