@@ -325,6 +325,9 @@ chrome.runtime.onMessage.addListener(function (request) {
 });
 
 async function verifyFile(file, checksum, downloadId) {
+    let mask = shadow.getElementById('mask');
+    let status = shadow.getElementById('status');
+    
     // Implement the "computing" style.
     title.innerHTML = chrome.i18n.getMessage("popupTitle");
     status.innerHTML = chrome.i18n.getMessage("popupDetails") + chrome.i18n.getMessage("popupStatusComputing");
