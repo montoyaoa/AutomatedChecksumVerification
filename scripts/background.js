@@ -17,25 +17,28 @@ chrome.extension.isAllowedFileSchemeAccess(function (isAllowed) {
     }
 });
 
-// Array containing all possible dangerous urls
-let linkToMonitor = [];
-
 /**
  * Listen to messages coming from content script
  */
 chrome.runtime.onMessage.addListener(function (request, sender) {
     switch (request.type) {
-        // A page with checksum and algo name has benn open all links are registered
+        // A page with checksums and algorithm names has been opened.
+        // Register all links on this page with those values.
         case "download":
             let tab = parseInt(sender.tab.id);
-
-            linkToMonitor.unshift({
+            let pageData = {
                 request: request,
                 urls: request.urls,
                 checksum: request.checksum,
                 tab: tab
+            };
+            // Get the current linkToMonitor array from storage
+            chrome.storage.local.get('linkToMonitor', function(data) {
+                let links = data.linkToMonitor || [];
+                links.unshift(pageData);
+                // Store the updated linkToMonitor array back to storage
+                chrome.storage.local.set({linkToMonitor: links});
             });
-
             break;
         // The delete link has been clicked on the popup
         case "remove":
