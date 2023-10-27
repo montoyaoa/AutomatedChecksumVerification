@@ -10,10 +10,6 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-
-let checksumValues = [];
-let checksumAlgos = [];
-
 /**
  * Extract pattern from a DOM element.
  *
@@ -79,76 +75,58 @@ function filter(set) {
     return checksumValues
 }
 
-/**
- * Detect checksums and algo names on webpage
- *
- * @returns {Promise<void>}
- */
-async function checksumFunction() {
-    //Arbitrary sleep to allows other js to load elements
-    await sleep(200);
-    // Detect checksum values in the page
-    checksumValues = filter(extractPattern(document.body, REGEXP_CHECKSUM_VALUE, true));
-    // Detect checksum algorithms in the page
-    checksumAlgos = extractPattern(document.body, REGEXP_CHECKSUM_ALGO, true);
-
-    console.debug(checksumValues);
-    console.debug(checksumAlgos);
-}
-
-checksumFunction();
-
-
 function isExtensionDangerous(filename) {
     return DANGEROUS_EXTENSIONS.reduce((acc, x) => acc || filename.endsWith(x), false);
 }
 
 
 /**
- * Find all link that are potentially dangerous and if there is checksums and algo names on the page, send info to background.
- *
+ * Inspect the page for download links and for checksum values and algorithms.
+ * Send this data to the service worker.
+ * 
  * @returns {Promise<void>}
  */
-async function linkToMonitor() {
+async function inspectPageAndSendInfo() {
     // Wait for site JS to load all content
-    await sleep(300);
+    await sleep(200);
+
+    // Detect checksum values in the page
+    const checksumValues = filter(extractPattern(document.body, REGEXP_CHECKSUM_VALUE, true));
+    // Detect checksum algorithms in the page
+    const checksumAlgos = extractPattern(document.body, REGEXP_CHECKSUM_ALGO, true);
+
+    console.debug(checksumValues);
+    console.debug(checksumAlgos);
+
+    // If there are any checksum values,
     if (checksumValues.size !== 0) {
         let urls = [];
-
+        // Store the URL of the download.
         document.querySelectorAll("a").forEach(function (link) {
-
             if (link.hasAttribute("href") && isExtensionDangerous(link.href)) {
-                // Send a download request to the background process based on the content type
-                urls.push(link.href)
-
+                urls.push(link.href);
             }
         });
+        // If there are any download URLs,
         if (urls.length !== 0) {
-            checksum = {
+            const checksum = {
                 type: [...checksumAlgos],
                 value: [...checksumValues],
             };
 
+            console.debug(urls);
+            console.debug(checksum);
+            // Pass this data to the service worker.
             chrome.runtime.sendMessage({
                 type: "download",
-                urls: [...urls],
+                urls: urls,
                 checksum: checksum,
             });
-
-            //keep background script open 2 min after checksum found on page
-            let i = 0;
-            while (i < 120) {
-                await sleep(1000);
-                chrome.runtime.sendMessage({type: "keepAlive"});
-                i++;
-            }
         }
-
     }
-
 }
 
-linkToMonitor();
+inspectPageAndSendInfo();
 
 
 /******************************************************************************
