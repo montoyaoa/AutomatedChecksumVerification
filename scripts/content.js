@@ -284,9 +284,8 @@ chrome.runtime.onMessage.addListener(function (request) {
             mask.style.display = 'block';
             break;
         case "downloadComplete":
-            // Hardcoded values for prototyping.
-            title.innerHTML = "Checksum Verification";
-            status.innerHTML = "Please upload the downloaded file for verification.";
+            chrome.i18n.getMessage("popupTitle");
+            status.innerHTML = chrome.i18n.getMessage("popupStatusUploadPrompt");
             uploadButton.style.display = "block";
             mask.style.display = 'block';
 
@@ -314,6 +313,7 @@ async function verifyFile(file, checksum, downloadId) {
     let status = shadow.getElementById('status');
 
     // Implement the "computing" style.
+    uploadButton.style.display = 'none';
     title.innerHTML = chrome.i18n.getMessage("popupTitle");
     status.innerHTML = chrome.i18n.getMessage("popupDetails") + chrome.i18n.getMessage("popupStatusComputing");
     mask.style.display = 'block';

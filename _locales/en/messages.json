@@ -21,8 +21,11 @@
   "message": "Verification of download integrity",
   "description": "Popup title"},
 "popupDetails": {
-  "message": "The link you clicked on has triggered a download and checksums were found on the webpage. Once the download is complete, the downloaded file will be checked against the found checksums and you will be notified of the result.",
+  "message": "The link you clicked on has triggered a download and checksums were found on the webpage. Once the download is complete, this extension can compute the checksum of the downloaded file to ensure it is valid.",
   "description": "Popup details about the action being taken by the plugin"},
+"popupStatusUploadPrompt": {
+    "message": "The download has completed. If you wish to verify the validity of the file, select it using the button below.",
+    "description": "Prompt to upload the file for verification"},
 "popupStatusDownloading": {
   "message": "<span class='mt-4 mb-2 d-flex justify-content-center'><i class='fas fa-download'></i> <span class='ml-2 mr-2'>Downloading... </span><i class='fa fa-spinner fa-spin'></i></span>",
   "description": "Popup status for download"},
