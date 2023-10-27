@@ -187,9 +187,19 @@ fileInput.style.display = "none";
 let uploadButton = document.createElement("button");
 uploadButton.innerHTML = "Upload for Verification";
 uploadButton.style.display = "none";
+uploadButton.style.marginTop = "10px";
 uploadButton.onclick = function() {
     fileInput.click();
 };
+
+let buttonWrapper = document.createElement("div");
+buttonWrapper.style.display = 'flex';           // Set the buttonWrapper div as a flex container
+buttonWrapper.style.flexDirection = 'column';   // Stack children vertically
+buttonWrapper.style.alignItems = 'center';      // Center children horizontally
+buttonWrapper.style.justifyContent = 'center';  // Center children vertically
+
+buttonWrapper.appendChild(uploadButton);
+
 
 let title = document.createElement("div");
 title.className = 'title';
@@ -202,7 +212,7 @@ content.innerHTML = '<p id="details"><p><p id="status">' +
     '<img src="' + chrome.runtime.getURL("icons/icon16.png") + '" alt="Icon of the plugin"></p>';
 
 content.appendChild(fileInput);
-content.appendChild(uploadButton);
+content.appendChild(buttonWrapper);
 
 popup.appendChild(popup_head);
 popup.appendChild(title);
