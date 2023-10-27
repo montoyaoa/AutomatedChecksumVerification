@@ -66,7 +66,7 @@ chrome.runtime.onMessage.addListener(function (request, sender) {
 //Stop download on create, verify if download is dangerous complete dictionnary of dangerous download
 chrome.downloads.onCreated.addListener(function (downloadItem) {
     console.debug("New download item:", downloadItem);
-    // Get the linkToMonitor and downloads arrays from storage
+    // Get the linkToMonitor and downloads arrays from local storage
     chrome.storage.local.get(['linkToMonitor', 'downloads'], function(data) {
         let links = data.linkToMonitor || [];
         let downloads = data.downloads || {};
@@ -94,113 +94,33 @@ chrome.downloads.onCreated.addListener(function (downloadItem) {
     });
 });
 
-
 chrome.downloads.onChanged.addListener(function (download) {
-    if (!(download.id in downloads)) {
-        // the download was not registered (i.e., wasn't triggered from a download link detected by the ext)
-        return;
-    }
-    //Store the download id
-    let tab = downloads[download.id].tab;
-
-    // Register the local filename of the download
-    if (download.filename) {
-        downloads[download.id].filename = "file://" + download.filename.current;
-    }
-    // Compute the checksum of the downloaded file
-    if (download.state && download.state.current === 'complete') {
-        downloads[download.id].completed = true;
-        // Send message to tab to display the computation
-        chrome.tabs.sendMessage(tab, {type: "computing"});
-
-        // Create a request to load downloaded file
-        const xhr = new XMLHttpRequest();
-        xhr.responseType = 'arraybuffer';
-        // Send the request to read the local (downloaded file)
-        console.debug(downloads[download.id].filename);
-        xhr.open("GET", downloads[download.id].filename, true);
-
-        // Start checksum computing
-        xhr.addEventListener("load", computeChecksum);
-
-        // Send an error message to the tab that created the download request
-        xhr.addEventListener("error", function () {
-            console.debug("An error occured while accessing the downloaded file");
-            chrome.tabs.sendMessage(tab, {
-                type: "error",
-                message: "An error occured while accessing the downloaded file"
-            });
-            delete downloads[download.id];
-
-        });
-
-        xhr.send();
-
-
-        /**
-         * Computes checksums for the downloaded file and compare with checksums found on the page triggering the download.
-         *
-         * @returns {Promise<void>}
-         */
-        async function computeChecksum() {
-            console.debug("Entering computeChecksum");
-
-            const checksum = downloads[download.id].checksum;
-            // noinspection Annotator
-            const checksum_types = checksum.type;
-            const checksum_value_actual = new Set(checksum.value);
-            const checksum_value_computed = new Set();
-
-            let checksum_result;
-
-            for (let checksum_type of checksum_types) {
-                switch (checksum_type.toLowerCase().replace('-', '')) {
-                    case CHECKSUM_TYPE_MD5:
-                        console.debug("md5");
-                        checksum_result = md5.hex(xhr.response);
-                        break;
-                    case CHECKSUM_TYPE_SHA1:
-                        console.debug("sha1");
-                        checksum_result = await hash("SHA-1", xhr.response);
-                        break;
-                    case CHECKSUM_TYPE_SHA256:
-                        console.debug("sha2");
-                        checksum_result = await hash("SHA-256", xhr.response);
-                        break;
-                    case CHECKSUM_TYPE_SHA384:
-                        console.debug("sha384");
-                        checksum_result = await hash("SHA-384", xhr.response);
-                        break;
-                    case CHECKSUM_TYPE_SHA512:
-                        console.debug("sha512");
-                        checksum_result = await hash("SHA-512", xhr.response);
-                        break;
-                    default:
-                        console.debug("An error has occured while computing the checksum: Unknown checksum type '" + checksum_type + "'");
-                        continue;
-                }
-                checksum_value_computed.add(checksum_result);
-
-            }
-
-            const valid = new Set([...checksum_value_computed].filter(x => checksum_value_actual.has(x))).size > 0;
-
-            // Send end of computation and result to tab
-            chrome.tabs.sendMessage(tab, {
-                type: "verifying",
-                valid: valid,
-                checksum_value_actual: [...checksum_value_actual],
-                checksum_value_computed: [...checksum_value_computed],
-                id: download.id,
-            });
-
-            delete downloads[download.id];
+    // Get the downloads array from local storage
+    chrome.storage.local.get(['downloads'], function(result) {
+        let downloads = result.downloads || {};
+        // If the download that triggered this function is not being tracked,
+        if (!(download.id in downloads)) {
+            // the download was not registered 
+            // (i.e., wasn't triggered from a download link detected by the extension)
+            return;
         }
-    } else if (download.state && download.state.current === 'interrupted') {
-        delete downloads[download.id];
-    }
+        let tab = downloads[download.id].tab;
+        // If the download has completed, send a message to the content script.
+        if (download.state && download.state.current === 'complete') {
+            chrome.tabs.sendMessage(tab, {
+                type: "downloadComplete", 
+                downloadId: download.id,
+                checksum: downloads[download.id].checksum
+            });
+        // Otherwise, if the download has been interrupted,
+        } else if (download.state && download.state.current === 'interrupted') {
+            // Delete the entry from the downloads array.
+            delete downloads[download.id];
+            // Store the updated download array back to local storage.
+            chrome.storage.local.set({downloads: downloads});
+        }
+    });
 });
-
 
 // Compute SHA digest for the downloaded file
 function hash(algo, buffer) {
