@@ -14,7 +14,7 @@
         }
       ],
     "default_locale": "en",
-    "permissions": ["alarms", "downloads", "tabs", "downloads.open"], 
+    "permissions": ["alarms", "downloads", "tabs", "downloads.open", "storage"], 
     "host_permissions": [
       "http://*/*", "https://*/*", "file://*"
     ],
