@@ -36,7 +36,7 @@ chrome.runtime.onMessage.addListener(function (request, sender) {
             chrome.storage.local.get('linkToMonitor', function(data) {
                 let links = data.linkToMonitor || [];
                 links.unshift(pageData);
-                // Store the updated linkToMonitor array back to storage
+                // Store the updated linkToMonitor array back to local storage
                 chrome.storage.local.set({linkToMonitor: links});
             });
             break;
@@ -63,28 +63,37 @@ chrome.runtime.onMessage.addListener(function (request, sender) {
  * Monitor downloads in order to share the user behaviour (try catch block)
  * Take care of launching checksum computation
  ******************************************************************************/
-let downloads = {};
-
 //Stop download on create, verify if download is dangerous complete dictionnary of dangerous download
 chrome.downloads.onCreated.addListener(function (downloadItem) {
-    console.debug(downloadItem);
-    for (let link of linkToMonitor) {
-        if (link.urls.includes(downloadItem.url) || link.urls.includes(downloadItem.finalUrl)) {
-            downloads[downloadItem.id] = {
-                download: downloadItem.url,
-                checksum: link.checksum,
-                tab: link.tab,
-                completed: false
-            };
-            chrome.tabs.sendMessage(link.tab, {type: "downloading"});
-            keepAlive();
-            break;
-
+    console.debug("New download item:", downloadItem);
+    // Get the linkToMonitor and downloads arrays from storage
+    chrome.storage.local.get(['linkToMonitor', 'downloads'], function(data) {
+        let links = data.linkToMonitor || [];
+        let downloads = data.downloads || {};
+        // For every link we are currently monitoring,
+        for (let link of links) {
+            // if that link matches the URL of the file being downloaded,
+            if (link.urls.includes(downloadItem.url) || link.urls.includes(downloadItem.finalUrl)) {
+                console.debug("Current state of downloads before addition:", downloads);
+                // store information about that download in the downloads array.
+                downloads[downloadItem.id] = {
+                    download: downloadItem.url,
+                    checksum: link.checksum,
+                    tab: link.tab,
+                    completed: false
+                };
+                // Store the updated download array back to local storage.
+                chrome.storage.local.set({downloads: downloads}, function() {
+                    console.debug("Updated state of downloads after addition:", downloads);
+                });
+                // Let the content script know that a download has started.
+                chrome.tabs.sendMessage(link.tab, {type: "downloading"});
+                break;
+            }
         }
-    }
-
-
+    });
 });
+
 
 chrome.downloads.onChanged.addListener(function (download) {
     if (!(download.id in downloads)) {
