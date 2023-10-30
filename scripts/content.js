@@ -12,6 +12,8 @@ const CHECKSUM_TYPE_SHA512 = 'sha512';
 const MSG_HIDE = '<span id="msg_hide" style="width: 100%; float: right;"><i class="fas fa-times" style="color: rgb(95, 99, 105);"></i></span>';
 const CLASS_HIGHLIGHTED_CHECKSUM = "highlighted_checksum";
 
+const ONE_GB = 1 * 1024 * 1024 * 1024;
+
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -331,94 +333,125 @@ async function verifyFile(file, checksum, downloadId) {
     console.debug("Uploaded file name:", file.name);
     console.debug("Uploaded file size:", file.size + " bytes");
 
-    // Read the file as an ArrayBuffer.
-    const fileData = await readFileAsArrayBuffer(file);
+    try {
+        // Read the file as an ArrayBuffer.
+        const fileData = await readFileAsArrayBuffer(file);
 
-    // Store the checksum data as local variables.
-    const checksum_types = checksum.type;
-    const checksum_value_actual = new Set(checksum.value);
-    const checksum_value_computed = new Set();
+         // Store the checksum data as local variables.
+        const checksum_types = checksum.type;
+        const checksum_value_actual = new Set(checksum.value);
+        const checksum_value_computed = new Set();
 
-    let checksum_result;
-    // For all types of checksum algorithms detected on the page,
-    for (let checksum_type of checksum_types) {
-        // calculate those checksums according to that algorithm on the given file.
-        switch (checksum_type.toLowerCase().replace('-', '')) {
-            case CHECKSUM_TYPE_MD5:
-                console.debug("md5");
-                checksum_result = md5.hex(fileData);
-                break;
-            case CHECKSUM_TYPE_SHA1:
-                console.debug("sha1");
-                checksum_result = await hash("SHA-1", fileData);
-                break;
-            case CHECKSUM_TYPE_SHA256:
-                console.debug("sha2");
-                checksum_result = await hash("SHA-256", fileData);
-                break;
-            case CHECKSUM_TYPE_SHA384:
-                console.debug("sha384");
-                checksum_result = await hash("SHA-384", fileData);
-                break;
-            case CHECKSUM_TYPE_SHA512:
-                console.debug("sha512");
-                checksum_result = await hash("SHA-512", fileData);
-                break;
-            default:
-                console.debug("An error has occured while computing the checksum: Unknown checksum type '" + checksum_type + "'");
-                continue;
+        let checksum_result;
+        // For all types of checksum algorithms detected on the page,
+        for (let checksum_type of checksum_types) {
+            // calculate those checksums according to that algorithm on the given file.
+            switch (checksum_type.toLowerCase().replace('-', '')) {
+                case CHECKSUM_TYPE_MD5:
+                    console.debug("md5");
+                    checksum_result = md5.hex(fileData);
+                    break;
+                case CHECKSUM_TYPE_SHA1:
+                    console.debug("sha1");
+                    checksum_result = await hash("SHA-1", fileData);
+                    break;
+                case CHECKSUM_TYPE_SHA256:
+                    console.debug("sha2");
+                    checksum_result = await hash("SHA-256", fileData);
+                    break;
+                case CHECKSUM_TYPE_SHA384:
+                    console.debug("sha384");
+                    checksum_result = await hash("SHA-384", fileData);
+                    break;
+                case CHECKSUM_TYPE_SHA512:
+                    console.debug("sha512");
+                    checksum_result = await hash("SHA-512", fileData);
+                    break;
+                default:
+                    console.debug("An error has occured while computing the checksum: Unknown checksum type '" + checksum_type + "'");
+                    continue;
+            }
+            // Store the computed checksum
+            checksum_value_computed.add(checksum_result);
         }
-        // Store the computed checksum
-        checksum_value_computed.add(checksum_result);
-    }
-    // The checksums are valid if the given and computed checksums match.
-    const valid = new Set([...checksum_value_computed].filter(x => checksum_value_actual.has(x))).size > 0;
+        // The checksums are valid if the given and computed checksums match.
+        const valid = new Set([...checksum_value_computed].filter(x => checksum_value_actual.has(x))).size > 0;
 
-    console.debug(checksum_value_actual);
-    console.debug(checksum_value_computed)
-    console.debug(valid);
+        console.debug(checksum_value_actual);
+        console.debug(checksum_value_computed)
+        console.debug(valid);
 
-    // If they are valid,
-    if (valid) {
-        // Apply the "safe" styling to the popup.
-        highlightPattern(document.body, new RegExp([...checksum_value_computed].join('|'), "gi"));
-        title.innerHTML = chrome.i18n.getMessage("contentPopupTitleSafe");
-        status.innerHTML = chrome.i18n.getMessage("popupStatusValid");
-    // Otherwise,
-    } else {
-        // Apply the "unsafe" styling to the popup.
-        title.innerHTML = chrome.i18n.getMessage("contentPopupTitleUnsafe");
-        status.innerHTML = chrome.i18n.getMessage("popupStatusInvalid");
-        //shadow.getElementById("adanger").onclick = openPrivateTab;
-        // If the user wants to delete the file,
-        shadow.getElementById("delete").onclick = function () {
-            // delete the file.
-            deleteFile(downloadId);
-        };
-    }
-    mask.style.display = 'block';
-
-    // Get the downloads array from local storage
-    chrome.storage.local.get(['downloads'], function(result) {
-        let downloads = result.downloads || {};
-        if (downloadId in downloads) {
-            // Remove this download from the array as it must have completed to reach verification.
-            delete downloads[downloadId];
-            // Store the updated downloads array back to local storage.
-            chrome.storage.local.set({downloads: downloads});
+        // If they are valid,
+        if (valid) {
+            // Apply the "safe" styling to the popup.
+            highlightPattern(document.body, new RegExp([...checksum_value_computed].join('|'), "gi"));
+            title.innerHTML = chrome.i18n.getMessage("contentPopupTitleSafe");
+            status.innerHTML = chrome.i18n.getMessage("popupStatusValid");
+        // Otherwise,
+        } else {
+            // Apply the "unsafe" styling to the popup.
+            title.innerHTML = chrome.i18n.getMessage("contentPopupTitleUnsafe");
+            status.innerHTML = chrome.i18n.getMessage("popupStatusInvalid");
+            //shadow.getElementById("adanger").onclick = openPrivateTab;
+            // If the user wants to delete the file,
+            shadow.getElementById("delete").onclick = function () {
+                // delete the file.
+                deleteFile(downloadId);
+            };
         }
-    });
+    } catch (error) {
+        if (error.message === "File size exceeds 1GB limit.") {
+            // Handle the large file size error
+            title.innerHTML = "File Too Large";
+            status.innerHTML = "THe file is too large to be verified in-browser. Please see the following for directions.";
+            mask.style.display = 'block';
+        } else {
+            // Handle other errors
+            console.error("An error occurred:", error.message);
+            title.innerHTML = "Error";
+            status.innerHTML = "An unexpected error occurred.";
+            mask.style.display = 'block';
+        }
+    } finally {
+        // Regardless of success or error, remove the download from local storage
+        chrome.storage.local.get(['downloads'], function(result) {
+            let downloads = result.downloads || {};
+            if (downloadId in downloads) {
+                delete downloads[downloadId];
+                chrome.storage.local.set({downloads: downloads});
+            }
+        });
+    }
 }
 
-// Reads the file as an array buffer.
 function readFileAsArrayBuffer(file) {
     return new Promise((resolve, reject) => {
+        // Check for file size
+        if (file.size > ONE_GB) {
+            reject(new Error("File size exceeds 1GB limit."));
+            return;
+        }
+
         const reader = new FileReader();
+
         reader.onload = event => resolve(event.target.result);
-        reader.onerror = error => reject(error);
+
+        reader.onerror = function(event) {
+            console.error("Error reading file:", event.target.error);
+            reject(event.target.error);
+        };
+
+        reader.onprogress = function(event) {
+            if (event.loaded && event.total) {
+                const percent = (event.loaded / event.total) * 100;
+                console.log(`Progress: ${Math.round(percent)}%`);
+            }
+        };
+
         reader.readAsArrayBuffer(file);
     });
 }
+
 
 // Compute SHA digest for the downloaded file
 function hash(algo, buffer) {
