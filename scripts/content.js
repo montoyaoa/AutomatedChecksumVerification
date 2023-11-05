@@ -1,6 +1,6 @@
 const REGEXP_CHECKSUM_VALUE = /(?:[a-f0-9]{32,}|[A-F0-9]{32,})/g;
 const CHECKSUM_VALUE_SIZE = [32, 40, 56, 64, 96, 128];
-const REGEXP_CHECKSUM_ALGO = /((sha|SHA)(-)?(1|256|2|384|512)|((md|MD)5))/g;
+const REGEXP_CHECKSUM_ALGO = /((sha|SHA)(\s*-?\s*)(1|256|2|384|512)|((md|MD)5))/g;
 const DANGEROUS_EXTENSIONS = ["dmg", "exe", "msi", "pkg", "iso", "zip", "tar.xz", "tar.gz", "tar.bz2", "tar", "deb", "rpm"];
 
 const CHECKSUM_TYPE_MD5 = 'md5';
@@ -348,7 +348,7 @@ async function verifyFile(file, checksum, downloadId) {
         // For all types of checksum algorithms detected on the page,
         for (let checksum_type of checksum_types) {
             // calculate those checksums according to that algorithm on the given file.
-            switch (checksum_type.toLowerCase().replace('-', '')) {
+            switch (checksum_type.toLowerCase().replace('-', '').replace(' ', '')) {
                 case CHECKSUM_TYPE_MD5:
                     console.debug("md5");
                     checksum_result = await computeMD5(file);
