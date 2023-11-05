@@ -334,8 +334,10 @@ async function verifyFile(file, checksum, downloadId) {
     console.debug("Uploaded file size:", file.size + " bytes");
 
     try {
-        // Read the file as an ArrayBuffer.
-        const fileData = await readFileAsArrayBuffer(file);
+        // Check if CryptoJS is loaded
+        if (typeof CryptoJS === 'undefined') {
+            throw new Error("CryptoJS is required and was not found.");
+        }
 
          // Store the checksum data as local variables.
         const checksum_types = checksum.type;
@@ -349,23 +351,24 @@ async function verifyFile(file, checksum, downloadId) {
             switch (checksum_type.toLowerCase().replace('-', '')) {
                 case CHECKSUM_TYPE_MD5:
                     console.debug("md5");
-                    checksum_result = md5.hex(fileData);
+                    checksum_result = await computeMD5(file);
                     break;
                 case CHECKSUM_TYPE_SHA1:
                     console.debug("sha1");
-                    checksum_result = await hash("SHA-1", fileData);
+                    checksum_result = await computeSHA1(file);
                     break;
                 case CHECKSUM_TYPE_SHA256:
                     console.debug("sha2");
-                    checksum_result = await hash("SHA-256", fileData);
+                    checksum_result = await computeSHA256(file);
+                    console.debug("Computed SHA-256 checksum:", checksum_result);
                     break;
                 case CHECKSUM_TYPE_SHA384:
                     console.debug("sha384");
-                    checksum_result = await hash("SHA-384", fileData);
+                    checksum_result = await computeSHA384(file);
                     break;
                 case CHECKSUM_TYPE_SHA512:
                     console.debug("sha512");
-                    checksum_result = await hash("SHA-512", fileData);
+                    checksum_result = await computeSHA512(file);
                     break;
                 default:
                     console.debug("An error has occured while computing the checksum: Unknown checksum type '" + checksum_type + "'");
@@ -400,18 +403,11 @@ async function verifyFile(file, checksum, downloadId) {
             };
         }
     } catch (error) {
-        if (error.message === "File size exceeds 1GB limit.") {
-            // Handle the large file size error
-            title.innerHTML = "File Too Large";
-            status.innerHTML = "THe file is too large to be verified in-browser. Please see the following for directions.";
-            mask.style.display = 'block';
-        } else {
-            // Handle other errors
-            console.error("An error occurred:", error.message);
-            title.innerHTML = "Error";
-            status.innerHTML = "An unexpected error occurred.";
-            mask.style.display = 'block';
-        }
+        // Handle other errors
+        console.error("An error occurred:", error.message);
+        title.innerHTML = "Error";
+        status.innerHTML = "An unexpected error occurred.";
+        mask.style.display = 'block';
     } finally {
         // Regardless of success or error, remove the download from local storage
         chrome.storage.local.get(['downloads'], function(result) {
@@ -424,34 +420,92 @@ async function verifyFile(file, checksum, downloadId) {
     }
 }
 
-function readFileAsArrayBuffer(file) {
+async function processChunk(chunk, workingHash) {
     return new Promise((resolve, reject) => {
-        // Check for file size
-        if (file.size > ONE_GB) {
-            reject(new Error("File size exceeds 1GB limit."));
-            return;
-        }
-
         const reader = new FileReader();
-
-        reader.onload = event => resolve(event.target.result);
-
-        reader.onerror = function(event) {
-            console.error("Error reading file:", event.target.error);
-            reject(event.target.error);
-        };
-
-        reader.onprogress = function(event) {
-            if (event.loaded && event.total) {
-                const percent = (event.loaded / event.total) * 100;
-                console.log(`Progress: ${Math.round(percent)}%`);
+        reader.onload = function(e) {
+            const arrayBuffer = e.target.result;
+            const uint8Array = new Uint8Array(arrayBuffer);
+            const wordsCount = Math.ceil(arrayBuffer.byteLength / 4);
+            let words = [];
+            for (let i = 0; i < wordsCount; i++) {
+                words[i] = (
+                    (uint8Array[i * 4] << 24) |
+                    (uint8Array[i * 4 + 1] << 16) |
+                    (uint8Array[i * 4 + 2] << 8) |
+                    (uint8Array[i * 4 + 3])
+                ) >>> 0;
             }
+            const wordArray = CryptoJS.lib.WordArray.create(words, arrayBuffer.byteLength);
+            workingHash.update(wordArray);
+            const incrementalHash = workingHash.clone().finalize().toString(CryptoJS.enc.Hex);
+            console.debug("Incremental hash:", incrementalHash);
+            resolve();
         };
-
-        reader.readAsArrayBuffer(file);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(chunk);
     });
 }
 
+async function computeMD5(file) {
+    let workingHash = CryptoJS.algo.MD5.create();
+    const chunkSize = 1024 * 1024; // 1MB chunks
+    let offset = 0;
+    while (offset < file.size) {
+        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+        await processChunk(chunk, workingHash);
+        offset += chunkSize;
+    }
+    return workingHash.finalize().toString(CryptoJS.enc.Hex);
+}
+
+async function computeSHA1(file) {
+    let workingHash = CryptoJS.algo.SHA1.create();
+    const chunkSize = 1024 * 1024; // 1MB chunks
+    let offset = 0;
+    while (offset < file.size) {
+        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+        await processChunk(chunk, workingHash);
+        offset += chunkSize;
+    }
+    return workingHash.finalize().toString(CryptoJS.enc.Hex);
+}
+
+async function computeSHA256(file) {
+    let workingHash = CryptoJS.algo.SHA256.create();
+    const chunkSize = 1024 * 1024; // 1MB chunks
+    let offset = 0;
+    while (offset < file.size) {
+        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+        await processChunk(chunk, workingHash);
+        offset += chunkSize;
+    }
+    return workingHash.finalize().toString(CryptoJS.enc.Hex);
+}
+
+async function computeSHA384(file) {
+    let workingHash = CryptoJS.algo.SHA384.create();
+    const chunkSize = 1024 * 1024; // 1MB chunks
+    let offset = 0;
+    while (offset < file.size) {
+        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+        await processChunk(chunk, workingHash);
+        offset += chunkSize;
+    }
+    return workingHash.finalize().toString(CryptoJS.enc.Hex);
+}
+
+async function computeSHA512(file) {
+    let workingHash = CryptoJS.algo.SHA512.create();
+    const chunkSize = 1024 * 1024; // 1MB chunks
+    let offset = 0;
+    while (offset < file.size) {
+        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+        await processChunk(chunk, workingHash);
+        offset += chunkSize;
+    }
+    return workingHash.finalize().toString(CryptoJS.enc.Hex);
+}
 
 // Compute SHA digest for the downloaded file
 function hash(algo, buffer) {

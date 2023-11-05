@@ -9,7 +9,7 @@
     "content_scripts": [
         {
           "matches": ["http://*/*", "https://*/*", "file://*"],
-          "js": ["scripts/content.js"],
+          "js": ["scripts/content.js", "scripts/md5.js", "scripts/sha1.js", "scripts/sha256.js", "scripts/sha384.js", "scripts/sha512.js"],
           "css": ["css/style.css", "css/fontawesome-all.css"]
         }
       ],
