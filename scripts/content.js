@@ -162,14 +162,14 @@ let popup_head = document.createElement("div");
 popup_head.style.width = "100%";
 popup_head.style.height = "20px";
 
-let unil_logo = document.createElement("img");
-const unil_logo_size = "16px";
-unil_logo.classList.add("rounded");
-unil_logo.alt = "Unil logo";
-unil_logo.style.cssFloat = "left";
-unil_logo.src = chrome.runtime.getURL('icons/unil-favicon.ico');
-unil_logo.style.height = unil_logo_size;
-unil_logo.style.width = unil_logo_size;
+let acv_logo = document.createElement("img");
+const acv_logo_size = "64px";
+acv_logo.classList.add("rounded");
+acv_logo.alt = "ACV logo";
+acv_logo.style.cssFloat = "left";
+acv_logo.src = chrome.runtime.getURL('icons/acv-logo.png');
+acv_logo.style.height = acv_logo_size;
+acv_logo.style.width = acv_logo_size;
 
 let hide_link = document.createElement("a");
 hide_link.style.cssFloat = "right";
@@ -178,7 +178,7 @@ hide_link.href = '#';
 hide_link.innerHTML = MSG_HIDE;
 hide_link.onclick = makeHideFunction(mask);
 
-popup_head.appendChild(unil_logo);
+popup_head.appendChild(acv_logo);
 popup_head.appendChild(hide_link);
 
 let fileInput = document.createElement("input");
