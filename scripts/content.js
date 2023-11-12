@@ -12,7 +12,7 @@ const CHECKSUM_TYPE_SHA512 = 'sha512';
 const MSG_HIDE = '<span id="msg_hide" style="width: 100%; float: right;"><i class="fas fa-times" style="color: rgb(95, 99, 105);"></i></span>';
 const CLASS_HIGHLIGHTED_CHECKSUM = "highlighted_checksum";
 
-const ONE_GB = 1 * 1024 * 1024 * 1024;
+const CHUNK_SIZE = 1024 * 1024; // 1MB
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -137,7 +137,7 @@ async function inspectPageAndSendInfo() {
 inspectPageAndSendInfo();
 
 
-/******************************************************************************
+/*******************************************************************************
  * Create shadow DOM to display popup
  ******************************************************************************/
 
@@ -158,27 +158,12 @@ shadow.appendChild(style);
 let popup = document.createElement("div");
 popup.id = 'popup';
 
+/*******************************************************************************
+ * The top of the popup, with the logos and exit button.
+ ******************************************************************************/
 let popup_head = document.createElement("div");
 popup_head.style.width = "100%";
 popup_head.style.height = "20px";
-
-let acv_logo = document.createElement("img");
-const acv_logo_size = "32px";
-acv_logo.classList.add("rounded");
-acv_logo.alt = "ACV logo";
-acv_logo.style.cssFloat = "left";
-acv_logo.src = chrome.runtime.getURL('icons/acv-logo.png');
-acv_logo.style.height = acv_logo_size;
-acv_logo.style.width = acv_logo_size;
-
-let uh_logo = document.createElement("img");
-const uh_logo_size = "24px";
-uh_logo.classList.add("rounded");
-uh_logo.alt = "Unil logo";
-uh_logo.style.cssFloat = "left";
-uh_logo.src = chrome.runtime.getURL('icons/uh-logo.png');
-uh_logo.style.height = uh_logo_size;
-uh_logo.style.width = uh_logo_size;
 
 let unil_logo = document.createElement("img");
 const unil_logo_size = "24px";
@@ -188,7 +173,26 @@ unil_logo.style.cssFloat = "left";
 unil_logo.src = chrome.runtime.getURL('icons/unil-favicon.ico');
 unil_logo.style.height = unil_logo_size;
 unil_logo.style.width = unil_logo_size;
+unil_logo.style.marginRight = '3px';
 
+let uh_logo = document.createElement("img");
+const uh_logo_size = "24px";
+uh_logo.classList.add("rounded");
+uh_logo.alt = "Unil logo";
+uh_logo.style.cssFloat = "left";
+uh_logo.src = chrome.runtime.getURL('icons/uh-logo.png');
+uh_logo.style.height = uh_logo_size;
+uh_logo.style.width = uh_logo_size;
+uh_logo.style.marginRight = '3px';
+
+let acv_logo = document.createElement("img");
+const acv_logo_size = "32px";
+acv_logo.classList.add("rounded");
+acv_logo.alt = "ACV logo";
+acv_logo.style.cssFloat = "left";
+acv_logo.src = chrome.runtime.getURL('icons/acv-logo.png');
+acv_logo.style.height = acv_logo_size;
+acv_logo.style.width = acv_logo_size;
 
 let hide_link = document.createElement("a");
 hide_link.style.cssFloat = "right";
@@ -200,8 +204,41 @@ hide_link.onclick = makeHideFunction(mask);
 popup_head.appendChild(unil_logo)
 popup_head.appendChild(uh_logo);
 popup_head.appendChild(acv_logo);
-
 popup_head.appendChild(hide_link);
+
+popup.appendChild(popup_head);
+
+/*******************************************************************************
+ * The title of the popup.
+ ******************************************************************************/
+let title = document.createElement("div");
+title.className = 'title';
+title.innerHTML = chrome.i18n.getMessage("contentPopupTitle");
+
+popup.appendChild(title);
+
+/*******************************************************************************
+ * The content of the popup.
+ ******************************************************************************/
+let content = document.createElement("div");
+content.className = 'content';
+// The content text is always in the center top of the content.
+content.innerHTML = '<p id="details"><p><p id="status">' +
+    chrome.i18n.getMessage("contentPopupStatus") +
+    '<img src="' + chrome.runtime.getURL("icons/icon16.png") + '" alt="Icon of the plugin"></p>';
+
+popup.appendChild(content);
+
+/*******************************************************************************
+ * The file upload button. This button is only visible after the download has
+ * completed. After a file is selected, it is made invisble for the calculation
+ * step.
+ ******************************************************************************/
+let buttonWrapper = document.createElement("div");
+buttonWrapper.style.display = 'flex';           // Set the buttonWrapper div as a flex container
+buttonWrapper.style.flexDirection = 'column';   // Stack children vertically
+buttonWrapper.style.alignItems = 'center';      // Center children horizontally
+buttonWrapper.style.justifyContent = 'center';  // Center children vertically
 
 let fileInput = document.createElement("input");
 fileInput.type = "file";
@@ -216,19 +253,31 @@ uploadButton.onclick = function() {
     fileInput.click();
 };
 
-let buttonWrapper = document.createElement("div");
-buttonWrapper.style.display = 'flex';           // Set the buttonWrapper div as a flex container
-buttonWrapper.style.flexDirection = 'column';   // Stack children vertically
-buttonWrapper.style.alignItems = 'center';      // Center children horizontally
-buttonWrapper.style.justifyContent = 'center';  // Center children vertically
-
 buttonWrapper.appendChild(uploadButton);
+
+/*******************************************************************************
+ * The verification container. This is visible after a file has been selected.
+ ******************************************************************************/
+let verificationContainer = document.createElement("div");
+verificationContainer.style.display = "none";
+verificationContainer.style.marginTop = "10px";
+
+let goalHash = document.createElement("div");
+goalHash.style.fontFamily = "monospace";
+goalHash.style.textAlign = 'center';
+goalHash.style.fontSize = '110%';
+
+let calculatedHash = document.createElement("div");
+calculatedHash.style.fontFamily = "monospace";
+calculatedHash.style.textAlign = 'center';
+calculatedHash.style.fontSize = '110%';
 
 // Create the loading bar container
 let loadingBarContainer = document.createElement("div");
 loadingBarContainer.id = 'loadingBarContainer';
 loadingBarContainer.style.width = '100%';
 loadingBarContainer.style.backgroundColor = '#ddd';
+loadingBarContainer.style.marginTop = "10px";
 
 // Create the loading bar element
 let loadingBar = document.createElement("div");
@@ -240,23 +289,15 @@ loadingBar.style.backgroundColor = '#4CAF50';
 // Append the loading bar to its container
 loadingBarContainer.appendChild(loadingBar);
 
-let title = document.createElement("div");
-title.className = 'title';
-title.innerHTML = chrome.i18n.getMessage("contentPopupTitle");
+verificationContainer.appendChild(goalHash);
+verificationContainer.appendChild(calculatedHash);
+verificationContainer.appendChild(loadingBarContainer);
 
-let content = document.createElement("div");
-content.className = 'content';
-content.innerHTML = '<p id="details"><p><p id="status">' +
-    chrome.i18n.getMessage("contentPopupStatus") +
-    '<img src="' + chrome.runtime.getURL("icons/icon16.png") + '" alt="Icon of the plugin"></p>';
 
 content.appendChild(fileInput);
 content.appendChild(buttonWrapper);
-content.appendChild(loadingBarContainer);
+content.appendChild(verificationContainer);
 
-popup.appendChild(popup_head);
-popup.appendChild(title);
-popup.appendChild(content);
 
 mask.appendChild(popup);
 shadow.appendChild(mask);
@@ -270,31 +311,6 @@ try {
 /******************************************************************************
  * Display info in window
  ******************************************************************************/
-
-// Highlight checksum in webpage
-function highlightPattern(elem, pattern) {
-    for (child of elem.children) {
-        highlightPattern(child, pattern);
-    }
-    if (elem.children.length === 0) {
-        innerHTML = elem.innerHTML;
-        elem.innerHTML = elem.innerHTML.replace(pattern, x => '<span class=' + CLASS_HIGHLIGHTED_CHECKSUM + '>' + x + '</span>');
-        if (innerHTML !== elem.innerHTML) { //replace has modified the element (i.e., it contains the checksum)
-            makeVisible(elem);
-        }
-    }
-}
-
-// Remove highlighting tags
-function cancelHighlight(elem = document.body) {
-    for (child of elem.children) {
-        cancelHighlight(child);
-    }
-    if (elem.className === CLASS_HIGHLIGHTED_CHECKSUM) {
-        elem.className = '';
-    }
-}
-
 function makeVisible(elem) {
     if (window.getComputedStyle(elem).display === 'none') {
         elem.style.display = 'initial';
@@ -307,7 +323,6 @@ function makeVisible(elem) {
 function makeHideFunction(e) {
     return function () {
         e.style.display = 'none';
-        cancelHighlight();
         return false;
     }
 }
@@ -328,7 +343,6 @@ chrome.runtime.onMessage.addListener(function (request) {
 
     switch (request.type) {
         case "downloading":
-            cancelHighlight();
             title.innerHTML = chrome.i18n.getMessage("popupTitle");
             status.innerHTML = chrome.i18n.getMessage("popupDetails") + chrome.i18n.getMessage("popupStatusDownloading");
             mask.style.display = 'block';
@@ -364,12 +378,11 @@ async function verifyFile(file, checksum, downloadId) {
 
     // Implement the "computing" style.
     uploadButton.style.display = 'none';
+    verificationContainer.style.display = 'block';
+    goalHash.innerText = checksum.value;
     title.innerHTML = chrome.i18n.getMessage("popupTitle");
     status.innerHTML = chrome.i18n.getMessage("popupDetails") + chrome.i18n.getMessage("popupStatusComputing");
     mask.style.display = 'block';
-
-    console.debug("Uploaded file name:", file.name);
-    console.debug("Uploaded file size:", file.size + " bytes");
 
     try {
         // Check if CryptoJS is loaded
@@ -385,28 +398,28 @@ async function verifyFile(file, checksum, downloadId) {
         let checksum_result;
         // For all types of checksum algorithms detected on the page,
         for (let checksum_type of checksum_types) {
+            let workingHash;
             // calculate those checksums according to that algorithm on the given file.
             switch (checksum_type.toLowerCase().replace('-', '').replace(' ', '')) {
                 case CHECKSUM_TYPE_MD5:
-                    console.debug("md5");
-                    checksum_result = await computeMD5(file);
+                    workingHash = CryptoJS.algo.MD5.create();
+                    checksum_result = await computeHash(file, workingHash);
                     break;
                 case CHECKSUM_TYPE_SHA1:
-                    console.debug("sha1");
-                    checksum_result = await computeSHA1(file);
+                    workingHash = CryptoJS.algo.SHA1.create();
+                    checksum_result = await computeHash(file, workingHash);
                     break;
                 case CHECKSUM_TYPE_SHA256:
-                    console.debug("sha2");
-                    checksum_result = await computeSHA256(file);
-                    console.debug("Computed SHA-256 checksum:", checksum_result);
+                    workingHash = CryptoJS.algo.SHA256.create();
+                    checksum_result = await computeHash(file, workingHash);
                     break;
                 case CHECKSUM_TYPE_SHA384:
-                    console.debug("sha384");
-                    checksum_result = await computeSHA384(file);
+                    workingHash = CryptoJS.algo.SHA384.create();
+                    checksum_result = await computeHash(file, workingHash);
                     break;
                 case CHECKSUM_TYPE_SHA512:
-                    console.debug("sha512");
-                    checksum_result = await computeSHA512(file);
+                    workingHash = CryptoJS.algo.SHA512.create();
+                    checksum_result = await computeHash(file, workingHash);
                     break;
                 default:
                     console.debug("An error has occured while computing the checksum: Unknown checksum type '" + checksum_type + "'");
@@ -418,22 +431,23 @@ async function verifyFile(file, checksum, downloadId) {
         // The checksums are valid if the given and computed checksums match.
         const valid = new Set([...checksum_value_computed].filter(x => checksum_value_actual.has(x))).size > 0;
 
-        console.debug(checksum_value_actual);
-        console.debug(checksum_value_computed)
-        console.debug(valid);
+        loadingBarContainer.style.display = "none";
 
         // If they are valid,
         if (valid) {
             // Apply the "safe" styling to the popup.
-            highlightPattern(document.body, new RegExp([...checksum_value_computed].join('|'), "gi"));
             title.innerHTML = chrome.i18n.getMessage("contentPopupTitleSafe");
             status.innerHTML = chrome.i18n.getMessage("popupStatusValid");
+            goalHash.style.color = 'green';
+            calculatedHash.style.color = 'green';
         // Otherwise,
         } else {
             // Apply the "unsafe" styling to the popup.
             title.innerHTML = chrome.i18n.getMessage("contentPopupTitleUnsafe");
             status.innerHTML = chrome.i18n.getMessage("popupStatusInvalid");
-            //shadow.getElementById("adanger").onclick = openPrivateTab;
+            goalHash.style.color = 'red';
+            calculatedHash.style.color = 'red';
+
             // If the user wants to delete the file,
             shadow.getElementById("delete").onclick = function () {
                 // delete the file.
@@ -477,7 +491,7 @@ async function processChunk(chunk, workingHash) {
             const wordArray = CryptoJS.lib.WordArray.create(words, arrayBuffer.byteLength);
             workingHash.update(wordArray);
             const incrementalHash = workingHash.clone().finalize().toString(CryptoJS.enc.Hex);
-            console.debug("Incremental hash:", incrementalHash);
+            calculatedHash.innerText = incrementalHash;
             resolve();
         };
         reader.onerror = reject;
@@ -485,79 +499,21 @@ async function processChunk(chunk, workingHash) {
     });
 }
 
-async function computeMD5(file) {
-    let workingHash = CryptoJS.algo.MD5.create();
-    const chunkSize = 1024 * 1024; // 1MB chunks
-    let offset = 0;
-    while (offset < file.size) {
-        updateLoadingBar((Math.min(offset + chunkSize, file.size) / file.size)*100);
-        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+async function computeHash(file, workingHash) {
+    let chunkStart = 0;
+    let chunkEnd;
+    while (chunkStart < file.size) {
+        chunkEnd = Math.min(chunkStart + CHUNK_SIZE, file.size);
+        updateLoadingBar(chunkEnd, file.size);
+        const chunk = file.slice(chunkStart, chunkEnd);
         await processChunk(chunk, workingHash);
-        offset += chunkSize;
+        chunkStart += CHUNK_SIZE;
     }
     return workingHash.finalize().toString(CryptoJS.enc.Hex);
 }
 
-async function computeSHA1(file) {
-    let workingHash = CryptoJS.algo.SHA1.create();
-    const chunkSize = 1024 * 1024; // 1MB chunks
-    let offset = 0;
-    while (offset < file.size) {
-        updateLoadingBar((Math.min(offset + chunkSize, file.size) / file.size)*100);
-        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
-        await processChunk(chunk, workingHash);
-        offset += chunkSize;
-    }
-    return workingHash.finalize().toString(CryptoJS.enc.Hex);
-}
-
-async function computeSHA256(file) {
-    let workingHash = CryptoJS.algo.SHA256.create();
-    const chunkSize = 1024 * 1024; // 1MB chunks
-    let offset = 0;
-    while (offset < file.size) {
-        updateLoadingBar((Math.min(offset + chunkSize, file.size) / file.size)*100);
-        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
-        await processChunk(chunk, workingHash);
-        offset += chunkSize;
-    }
-    return workingHash.finalize().toString(CryptoJS.enc.Hex);
-}
-
-async function computeSHA384(file) {
-    let workingHash = CryptoJS.algo.SHA384.create();
-    const chunkSize = 1024 * 1024; // 1MB chunks
-    let offset = 0;
-    while (offset < file.size) {
-        updateLoadingBar((Math.min(offset + chunkSize, file.size) / file.size)*100);
-        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
-        await processChunk(chunk, workingHash);
-        offset += chunkSize;
-    }
-    return workingHash.finalize().toString(CryptoJS.enc.Hex);
-}
-
-async function computeSHA512(file) {
-    let workingHash = CryptoJS.algo.SHA512.create();
-    const chunkSize = 1024 * 1024; // 1MB chunks
-    let offset = 0;
-    while (offset < file.size) {
-        updateLoadingBar((Math.min(offset + chunkSize, file.size) / file.size)*100);
-        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
-        await processChunk(chunk, workingHash);
-        offset += chunkSize;
-    }
-    return workingHash.finalize().toString(CryptoJS.enc.Hex);
-}
-
-// Compute SHA digest for the downloaded file
-function hash(algo, buffer) {
-    return crypto.subtle.digest(algo, buffer).then(function (hash) {
-        return Array.from(new Uint8Array(hash)).map(b => ('00' + b.toString(16)).slice(-2)).join('');
-    });
-}
-
-function updateLoadingBar(percentage) {
+function updateLoadingBar(position, fileSize) {
+    let percentage = (position / fileSize) * 100;
     loadingBar.style.width = percentage + '%';
   }
   
