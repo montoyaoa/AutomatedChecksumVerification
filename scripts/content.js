@@ -224,6 +224,21 @@ buttonWrapper.style.justifyContent = 'center';  // Center children vertically
 
 buttonWrapper.appendChild(uploadButton);
 
+// Create the loading bar container
+let loadingBarContainer = document.createElement("div");
+loadingBarContainer.id = 'loadingBarContainer';
+loadingBarContainer.style.width = '100%';
+loadingBarContainer.style.backgroundColor = '#ddd';
+
+// Create the loading bar element
+let loadingBar = document.createElement("div");
+loadingBar.id = 'loadingBar';
+loadingBar.style.width = '0%'; // Start at 0%
+loadingBar.style.height = '30px'; // Set a fixed height for the loading bar
+loadingBar.style.backgroundColor = '#4CAF50';
+
+// Append the loading bar to its container
+loadingBarContainer.appendChild(loadingBar);
 
 let title = document.createElement("div");
 title.className = 'title';
@@ -237,6 +252,7 @@ content.innerHTML = '<p id="details"><p><p id="status">' +
 
 content.appendChild(fileInput);
 content.appendChild(buttonWrapper);
+content.appendChild(loadingBarContainer);
 
 popup.appendChild(popup_head);
 popup.appendChild(title);
@@ -244,12 +260,12 @@ popup.appendChild(content);
 
 mask.appendChild(popup);
 shadow.appendChild(mask);
+
 try {
     document.body.appendChild(mask_);
 } catch (e) {
     console.debug("Error in appending shadow DOM: " + e.toString());
 }
-
 
 /******************************************************************************
  * Display info in window
@@ -474,6 +490,7 @@ async function computeMD5(file) {
     const chunkSize = 1024 * 1024; // 1MB chunks
     let offset = 0;
     while (offset < file.size) {
+        updateLoadingBar((Math.min(offset + chunkSize, file.size) / file.size)*100);
         const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
         await processChunk(chunk, workingHash);
         offset += chunkSize;
@@ -486,6 +503,7 @@ async function computeSHA1(file) {
     const chunkSize = 1024 * 1024; // 1MB chunks
     let offset = 0;
     while (offset < file.size) {
+        updateLoadingBar((Math.min(offset + chunkSize, file.size) / file.size)*100);
         const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
         await processChunk(chunk, workingHash);
         offset += chunkSize;
@@ -498,6 +516,7 @@ async function computeSHA256(file) {
     const chunkSize = 1024 * 1024; // 1MB chunks
     let offset = 0;
     while (offset < file.size) {
+        updateLoadingBar((Math.min(offset + chunkSize, file.size) / file.size)*100);
         const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
         await processChunk(chunk, workingHash);
         offset += chunkSize;
@@ -510,6 +529,7 @@ async function computeSHA384(file) {
     const chunkSize = 1024 * 1024; // 1MB chunks
     let offset = 0;
     while (offset < file.size) {
+        updateLoadingBar((Math.min(offset + chunkSize, file.size) / file.size)*100);
         const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
         await processChunk(chunk, workingHash);
         offset += chunkSize;
@@ -522,6 +542,7 @@ async function computeSHA512(file) {
     const chunkSize = 1024 * 1024; // 1MB chunks
     let offset = 0;
     while (offset < file.size) {
+        updateLoadingBar((Math.min(offset + chunkSize, file.size) / file.size)*100);
         const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
         await processChunk(chunk, workingHash);
         offset += chunkSize;
@@ -535,5 +556,10 @@ function hash(algo, buffer) {
         return Array.from(new Uint8Array(hash)).map(b => ('00' + b.toString(16)).slice(-2)).join('');
     });
 }
+
+function updateLoadingBar(percentage) {
+    loadingBar.style.width = percentage + '%';
+  }
+  
 
 
