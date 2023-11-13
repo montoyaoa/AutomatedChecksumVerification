@@ -10,7 +10,6 @@ const CHECKSUM_TYPE_SHA384 = 'sha384';
 const CHECKSUM_TYPE_SHA512 = 'sha512';
 
 const MSG_HIDE = '<span id="msg_hide" style="width: 100%; float: right;"><i class="fas fa-times" style="color: rgb(95, 99, 105);"></i></span>';
-const CLASS_HIGHLIGHTED_CHECKSUM = "highlighted_checksum";
 
 const CHUNK_SIZE = 1024 * 1024; // 1MB
 
@@ -18,13 +17,23 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- * Extract pattern from a DOM element.
+/*******************************************************************************
+ * Page Inspection
  *
- * @param elem          HTML Node to start the research.
- * @param pattern       Regex to find in node.
- * @param root          Used for the recursion.
- * @returns {Set<string>}  Set of element(s) matching the pattern
+ * The functions below inspects a page for download links and accompanying 
+ * checksum values and algorithms.
+ ******************************************************************************/
+
+/**
+ * Recursively extracts text matching a given regex pattern from the provided
+ * DOM element and its children.
+ * 
+ * @param {Node} elem - The DOM element to start the recursive search.
+ * @param {RegExp} pattern - The regex pattern to match against the element's 
+ * text.
+ * @param {boolean} [root=false] - Flag indicating if the current element is the
+ * root of the recursion.
+ * @returns {Set<string>} A set of unique strings matching the regex pattern.
  */
 function extractPattern(elem, pattern, root = false) {
     try {
@@ -51,60 +60,67 @@ function extractPattern(elem, pattern, root = false) {
         return new Set()
 
     }
-
 }
 
-function diversity(checksum, limit) {
-    let set = new Set();
-    for (char of checksum) {
-        set.add(char);
-    }
-
-    return (set.size > limit);
-}
-
+/**
+ * Checks if a string contains a mix of letters and numbers.
+ * 
+ * @param {string} elem - The string to evaluate.
+ * @returns {boolean} True if the string contains both letters and numbers; 
+ * otherwise, false.
+ */
 function hasMix(elem) {
     const letters = /([a-f]|[A-F])/;
     const numbers = /([0-9])/;
     return letters.test(elem) && numbers.test(elem);
 }
 
+/**
+ * Filters a set of strings to include only those that are valid checksums.
+ * A valid checksum is defined as a string of a certain length that contains a 
+ * mix of letters and numbers.
+ * 
+ * @param {Set<string>} set - The set of strings to filter.
+ * @returns {Set<string>} A new set containing only strings that are valid 
+ * checksums.
+ */
 function filter(set) {
     const checksumValues = new Set();
     for (let elem of set) {
         if (CHECKSUM_VALUE_SIZE.includes(elem.length)) {
             if (hasMix(elem)) {
-                if (diversity(elem, 10)) {
-                    checksumValues.add(elem)
-                }
+                checksumValues.add(elem)
             }
         }
     }
     return checksumValues
 }
 
+/**
+ * Determines if a file is considered dangerous based on its filename.
+ * 
+ * @param {string} filename - The name of the file to check.
+ * @returns {boolean} True if the file has a dangerous extension; otherwise, 
+ * false.
+ */
 function isExtensionDangerous(filename) {
     return DANGEROUS_EXTENSIONS.reduce((acc, x) => acc || filename.endsWith(x), false);
 }
 
 
 /**
- * Inspect the page for download links and for checksum values and algorithms.
- * Send this data to the service worker.
- * 
- * @returns {Promise<void>}
+ * Inspects the current web page for download links and checksum information.
+ * If checksums are found, it sends this data to the service worker for further 
+ * processing.
  */
 async function inspectPageAndSendInfo() {
-    // Wait for site JS to load all content
+    // Wait for site JS to load all content.
     await sleep(200);
 
-    // Detect checksum values in the page
+    // Detect checksum values in the page.
     const checksumValues = filter(extractPattern(document.body, REGEXP_CHECKSUM_VALUE, true));
-    // Detect checksum algorithms in the page
+    // Detect checksum algorithms in the page.
     const checksumAlgos = extractPattern(document.body, REGEXP_CHECKSUM_ALGO, true);
-
-    console.debug(checksumValues);
-    console.debug(checksumAlgos);
 
     // If there are any checksum values,
     if (checksumValues.size !== 0) {
@@ -121,9 +137,6 @@ async function inspectPageAndSendInfo() {
                 type: [...checksumAlgos],
                 value: [...checksumValues],
             };
-
-            console.debug(urls);
-            console.debug(checksum);
             // Pass this data to the service worker.
             chrome.runtime.sendMessage({
                 type: "download",
@@ -134,13 +147,17 @@ async function inspectPageAndSendInfo() {
     }
 }
 
+// Invokes the inspectPageAndSendInfo function to start the inspection process.
 inspectPageAndSendInfo();
 
 
 /*******************************************************************************
- * Create shadow DOM to display popup
+ * Extension UI definitions.
+ * 
+ * The following defines how the extension's UI appears. It consists of a popup.
  ******************************************************************************/
 
+/* Create shadow DOM to display popup. */
 let mask_ = document.createElement("div");
 let shadow = mask_.attachShadow({mode: 'open'});
 
@@ -158,9 +175,7 @@ shadow.appendChild(style);
 let popup = document.createElement("div");
 popup.id = 'popup';
 
-/*******************************************************************************
- * The top of the popup, with the logos and exit button.
- ******************************************************************************/
+/* The top of the popup, with the logos and exit button. */
 let popup_head = document.createElement("div");
 popup_head.style.width = "100%";
 popup_head.style.height = "20px";
@@ -208,37 +223,35 @@ popup_head.appendChild(hide_link);
 
 popup.appendChild(popup_head);
 
-/*******************************************************************************
- * The title of the popup.
- ******************************************************************************/
+/* The title of the popup. */
 let title = document.createElement("div");
 title.className = 'title';
 title.innerHTML = chrome.i18n.getMessage("contentPopupTitle");
 
 popup.appendChild(title);
 
-/*******************************************************************************
- * The content of the popup.
- ******************************************************************************/
+/* The content of the popup. */
 let content = document.createElement("div");
 content.className = 'content';
-// The content text is always in the center top of the content.
 content.innerHTML = '<p id="details"><p><p id="status">' +
     chrome.i18n.getMessage("contentPopupStatus") +
-    '<img src="' + chrome.runtime.getURL("icons/icon16.png") + '" alt="Icon of the plugin"></p>';
+    '<img src="' + chrome.runtime.getURL("icons/icon16.png") +
+     '" alt="Icon of the plugin"></p>';
 
 popup.appendChild(content);
 
-/*******************************************************************************
- * The file upload button. This button is only visible after the download has
+/**
+ * The file upload button. 
+ * 
+ * This button is only visible after the download has
  * completed. After a file is selected, it is made invisble for the calculation
  * step.
- ******************************************************************************/
+ */
 let buttonWrapper = document.createElement("div");
-buttonWrapper.style.display = 'flex';           // Set the buttonWrapper div as a flex container
-buttonWrapper.style.flexDirection = 'column';   // Stack children vertically
-buttonWrapper.style.alignItems = 'center';      // Center children horizontally
-buttonWrapper.style.justifyContent = 'center';  // Center children vertically
+buttonWrapper.style.display = 'flex';
+buttonWrapper.style.flexDirection = 'column';
+buttonWrapper.style.alignItems = 'center';
+buttonWrapper.style.justifyContent = 'center';
 
 let fileInput = document.createElement("input");
 fileInput.type = "file";
@@ -253,11 +266,18 @@ uploadButton.onclick = function() {
     fileInput.click();
 };
 
+buttonWrapper.appendChild(fileInput);
 buttonWrapper.appendChild(uploadButton);
 
-/*******************************************************************************
- * The verification container. This is visible after a file has been selected.
- ******************************************************************************/
+content.appendChild(buttonWrapper);
+
+/**
+ * The verification container. 
+ * 
+ * This is visible after a file has been selected. It contains the checksum as 
+ * listed on the page, the computed checksum, and the loading bar indicating
+ * processsing progress.
+ */
 let verificationContainer = document.createElement("div");
 verificationContainer.style.display = "none";
 verificationContainer.style.marginTop = "10px";
@@ -272,34 +292,29 @@ calculatedHash.style.fontFamily = "monospace";
 calculatedHash.style.textAlign = 'center';
 calculatedHash.style.fontSize = '110%';
 
-// Create the loading bar container
+/* The loading bar. */
 let loadingBarContainer = document.createElement("div");
 loadingBarContainer.id = 'loadingBarContainer';
 loadingBarContainer.style.width = '100%';
 loadingBarContainer.style.backgroundColor = '#ddd';
 loadingBarContainer.style.marginTop = "10px";
 
-// Create the loading bar element
 let loadingBar = document.createElement("div");
 loadingBar.id = 'loadingBar';
-loadingBar.style.width = '0%'; // Start at 0%
-loadingBar.style.height = '30px'; // Set a fixed height for the loading bar
+loadingBar.style.width = '0%';
+loadingBar.style.height = '30px';
 loadingBar.style.backgroundColor = '#4CAF50';
 
-// Append the loading bar to its container
 loadingBarContainer.appendChild(loadingBar);
 
 verificationContainer.appendChild(goalHash);
 verificationContainer.appendChild(calculatedHash);
 verificationContainer.appendChild(loadingBarContainer);
 
-
-content.appendChild(fileInput);
-content.appendChild(buttonWrapper);
 content.appendChild(verificationContainer);
 
-
 mask.appendChild(popup);
+
 shadow.appendChild(mask);
 
 try {
@@ -309,8 +324,10 @@ try {
 }
 
 /******************************************************************************
- * Display info in window
+ * UI helper functions.
  ******************************************************************************/
+
+/* Makes an element visible. */
 function makeVisible(elem) {
     if (window.getComputedStyle(elem).display === 'none') {
         elem.style.display = 'initial';
@@ -320,6 +337,7 @@ function makeVisible(elem) {
     }
 }
 
+/* Creates a function that hides an element. */
 function makeHideFunction(e) {
     return function () {
         e.style.display = 'none';
@@ -335,43 +353,59 @@ function deleteFile(id) {
     });
 }
 
-
-// Listen to the background process
-chrome.runtime.onMessage.addListener(function (request) {
+/******************************************************************************
+ * Background process listener.
+ * Performs actions based on messages from the background processs.
+ ******************************************************************************/
+chrome.runtime.onMessage.addListener(function (message) {
     let mask = shadow.getElementById('mask');
     let status = shadow.getElementById('status');
 
-    switch (request.type) {
+    switch (message.type) {
+        // A download has been started.
         case "downloading":
+            // Style the popup accordingly.
             title.innerHTML = chrome.i18n.getMessage("popupTitle");
             status.innerHTML = chrome.i18n.getMessage("popupDetails") + chrome.i18n.getMessage("popupStatusDownloading");
             mask.style.display = 'block';
             break;
+        // A download has completed.
         case "downloadComplete":
+            // Style the popup accordingly.
             chrome.i18n.getMessage("popupTitle");
             status.innerHTML = chrome.i18n.getMessage("popupStatusUploadPrompt");
             uploadButton.style.display = "block";
             mask.style.display = 'block';
 
+            // Start verification once the file has been selected.
             fileInput.addEventListener("change", handleFileChange = function() {
                 if (this.files.length > 0) {
-                    verifyFile(this.files[0], request.checksum, request.downloadId); 
+                    verifyFile(this.files[0], message.checksum, message.downloadId); 
                 }
             });
             break;  
+        // A file has been deleted.
         case "deleted":
+            // Style the popup accordingly.
             status.innerHTML = chrome.i18n.getMessage("popupStatusDeleted");
             mask.style.display = 'block';
             break;
+        // An error has occurred in the background script.
         case "error":
-            console.debug("Error: " + request.message);
+            // Print the error message.
+            console.debug("Error: " + message.message);
             break;
+        // Unknown message type.
         default:
-            console.debug("Unknown message: " + request.type);
+            // Print the message type.
+            console.debug("Unknown message: " + message.type);
             return;
     }
 });
 
+/******************************************************************************
+ * Verify a file by calculating its checksum.
+ ******************************************************************************/
 async function verifyFile(file, checksum, downloadId) {
     let mask = shadow.getElementById('mask');
     let status = shadow.getElementById('status');
@@ -398,8 +432,8 @@ async function verifyFile(file, checksum, downloadId) {
         let checksum_result;
         // For all types of checksum algorithms detected on the page,
         for (let checksum_type of checksum_types) {
-            let workingHash;
             // calculate those checksums according to that algorithm on the given file.
+            let workingHash;
             switch (checksum_type.toLowerCase().replace('-', '').replace(' ', '')) {
                 case CHECKSUM_TYPE_MD5:
                     workingHash = CryptoJS.algo.MD5.create();
@@ -430,8 +464,6 @@ async function verifyFile(file, checksum, downloadId) {
         }
         // The checksums are valid if the given and computed checksums match.
         const valid = new Set([...checksum_value_computed].filter(x => checksum_value_actual.has(x))).size > 0;
-
-        loadingBarContainer.style.display = "none";
 
         // If they are valid,
         if (valid) {
@@ -472,6 +504,10 @@ async function verifyFile(file, checksum, downloadId) {
     }
 }
 
+/******************************************************************************
+ * Compute the checksum of a portion of a file and update the working hash with
+ * the result.
+ ******************************************************************************/
 async function processChunk(chunk, workingHash) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -499,6 +535,9 @@ async function processChunk(chunk, workingHash) {
     });
 }
 
+/******************************************************************************
+ * Compute the checksum of a file given a particular hashing algorithm.
+ ******************************************************************************/
 async function computeHash(file, workingHash) {
     let chunkStart = 0;
     let chunkEnd;
@@ -509,9 +548,13 @@ async function computeHash(file, workingHash) {
         await processChunk(chunk, workingHash);
         chunkStart += CHUNK_SIZE;
     }
+    loadingBarContainer.style.display = "none";
     return workingHash.finalize().toString(CryptoJS.enc.Hex);
 }
 
+/******************************************************************************
+ * Update the loading bar with the checksum calculation progress.
+ ******************************************************************************/
 function updateLoadingBar(position, fileSize) {
     let percentage = (position / fileSize) * 100;
     loadingBar.style.width = percentage + '%';
