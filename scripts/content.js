@@ -97,14 +97,21 @@ function filter(set) {
 }
 
 /**
- * Determines if a file is considered dangerous based on its filename.
+ * Determines if a URL leading to a download could be dangerous based on its 
+ * value.
  * 
- * @param {string} filename - The name of the file to check.
- * @returns {boolean} True if the file has a dangerous extension; otherwise, 
- * false.
+ * @param {string} url - The URL to check.
+ * @returns {boolean} True if the URL might lead to a dangerous download; 
+ * otherwise, false.
  */
-function isExtensionDangerous(filename) {
-    return DANGEROUS_EXTENSIONS.reduce((acc, x) => acc || filename.endsWith(x), false);
+function isExtensionDangerous(url) {
+    // First, check if the URL ends with a dangerous extension
+    const hasDangerousExtension = DANGEROUS_EXTENSIONS.some(ext => url.endsWith('.' + ext));
+    if (hasDangerousExtension) return true;
+
+    // Check if the URL is known to initiate a download based on specific query parameters or patterns
+    const knownDownloadPatterns = [/do=download\.file/];
+    return knownDownloadPatterns.some(pattern => pattern.test(url));
 }
 
 
