@@ -413,7 +413,7 @@ async function verifyFile(file, checksum, downloadId) {
     // Implement the "computing" style.
     uploadButton.style.display = 'none';
     verificationContainer.style.display = 'block';
-    goalHash.innerText = checksum.value;
+    goalHash.innerHTML = checksum.value.join('<br>');
     title.innerHTML = chrome.i18n.getMessage("popupTitle");
     status.innerHTML = chrome.i18n.getMessage("popupDetails") + chrome.i18n.getMessage("popupStatusComputing");
     mask.style.display = 'block';
@@ -429,11 +429,14 @@ async function verifyFile(file, checksum, downloadId) {
         const checksum_value_actual = new Set(checksum.value);
         const checksum_value_computed = new Set();
 
+        let valid;
+
         let checksum_result;
         // For all types of checksum algorithms detected on the page,
         for (let checksum_type of checksum_types) {
             // calculate those checksums according to that algorithm on the given file.
             let workingHash;
+            loadingBar.style.width = '0%';
             switch (checksum_type.toLowerCase().replace('-', '').replace(' ', '')) {
                 case CHECKSUM_TYPE_MD5:
                     workingHash = CryptoJS.algo.MD5.create();
@@ -461,23 +464,45 @@ async function verifyFile(file, checksum, downloadId) {
             }
             // Store the computed checksum
             checksum_value_computed.add(checksum_result);
+
+            // The checksums are valid if the given and computed checksums match.
+            // Stop calculating checksums on the first match.
+            valid = new Set([...checksum_value_computed].filter(x => checksum_value_actual.has(x))).size > 0;
+            if(valid){
+                break;
+            }
         }
-        // The checksums are valid if the given and computed checksums match.
-        const valid = new Set([...checksum_value_computed].filter(x => checksum_value_actual.has(x))).size > 0;
 
         // If they are valid,
         if (valid) {
             // Apply the "safe" styling to the popup.
             title.innerHTML = chrome.i18n.getMessage("contentPopupTitleSafe");
             status.innerHTML = chrome.i18n.getMessage("popupStatusValid");
-            goalHash.style.color = 'green';
+            // Clear the existing content of goalHash
+            goalHash.innerHTML = '';
+
+            // Then, for each checksum provided on the page, create an element
+            // and style it depending on whether it matches a computed checksum
+            checksum.value.forEach((checksumValue) => {
+                // create a new div for each checksum
+                const checksumElem = document.createElement('div');
+                // set the text content to the checksum value
+                checksumElem.textContent = checksumValue; 
+
+                // If the computed checksums contain this value, add styling to indicate a match
+                if (checksum_value_computed.has(checksumValue.toLowerCase().replace('-', ''))) {
+                    checksumElem.style.color = 'green';
+                }
+
+                // Append the checksum element to the goalHash container
+                goalHash.appendChild(checksumElem);
+            });
             calculatedHash.style.color = 'green';
         // Otherwise,
         } else {
             // Apply the "unsafe" styling to the popup.
             title.innerHTML = chrome.i18n.getMessage("contentPopupTitleUnsafe");
             status.innerHTML = chrome.i18n.getMessage("popupStatusInvalid");
-            goalHash.style.color = 'red';
             calculatedHash.style.color = 'red';
 
             // If the user wants to delete the file,
@@ -541,6 +566,7 @@ async function processChunk(chunk, workingHash) {
 async function computeHash(file, workingHash) {
     let chunkStart = 0;
     let chunkEnd;
+    loadingBarContainer.style.display = "block";
     while (chunkStart < file.size) {
         chunkEnd = Math.min(chunkStart + CHUNK_SIZE, file.size);
         updateLoadingBar(chunkEnd, file.size);
