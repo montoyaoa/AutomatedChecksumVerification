@@ -110,7 +110,7 @@ function isExtensionDangerous(url) {
     if (hasDangerousExtension) return true;
 
     // Check if the URL is known to initiate a download based on specific query parameters or patterns
-    const knownDownloadPatterns = [/do=download\.file/];
+    const knownDownloadPatterns = [/download/];
     return knownDownloadPatterns.some(pattern => pattern.test(url));
 }
 
