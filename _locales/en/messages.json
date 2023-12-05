@@ -23,8 +23,14 @@
 "popupDetails": {
   "message": "The link you clicked on has triggered a download and checksums were found on the webpage. Once the download is complete, this extension can compute the checksum of the downloaded to compare against the checksums found on the page.",
   "description": "Popup details about the action being taken by the plugin"},
+"popupTitleVerifying": {
+  "message": "Now verifying your file",
+  "description": "Popup title"},
+"popupDetailsVerifying": {
+  "message": "Your computer is performing mathematical calculations on the file's contents to produce a value called a <em>checksum</em>. Software developers provide these values so you can verify the file has been downloaded in its entirety without being tampered with.",
+  "description": "Popup details about the action being taken by the plugin"},
 "popupStatusUploadPrompt": {
-    "message": "The download has completed. If you wish to verify the validity of the file, select it using the button below.",
+    "message": "The download has completed. If you wish to verify the validity of the file, select it using the button below.<br>The file is verified locally and never leaves your computer.",
     "description": "Prompt to upload the file for verification"},
 "popupStatusDownloading": {
   "message": "<span class='mt-4 mb-2 d-flex justify-content-center'><i class='fas fa-download'></i> <span class='ml-2 mr-2'>Downloading... </span><i class='fa fa-spinner fa-spin'></i></span>",
