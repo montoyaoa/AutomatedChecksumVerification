@@ -266,7 +266,7 @@ fileInput.id = "fileUpload";
 fileInput.style.display = "none";
 
 let uploadButton = document.createElement("button");
-uploadButton.innerHTML = "Upload for Verification";
+uploadButton.innerHTML = "Select File";
 uploadButton.style.display = "none";
 uploadButton.style.marginTop = "10px";
 uploadButton.onclick = function() {
@@ -379,7 +379,7 @@ chrome.runtime.onMessage.addListener(function (message) {
         // A download has completed.
         case "downloadComplete":
             // Style the popup accordingly.
-            chrome.i18n.getMessage("popupTitle");
+            title.innerHTML = chrome.i18n.getMessage("popupTitle");
             status.innerHTML = chrome.i18n.getMessage("popupStatusUploadPrompt");
             uploadButton.style.display = "block";
             mask.style.display = 'block';
@@ -421,8 +421,8 @@ async function verifyFile(file, checksum, downloadId) {
     uploadButton.style.display = 'none';
     verificationContainer.style.display = 'block';
     goalHash.innerHTML = checksum.value.join('<br>');
-    title.innerHTML = chrome.i18n.getMessage("popupTitle");
-    status.innerHTML = chrome.i18n.getMessage("popupDetails") + chrome.i18n.getMessage("popupStatusComputing");
+    title.innerHTML = chrome.i18n.getMessage("popupTitleVerifying");
+    status.innerHTML = chrome.i18n.getMessage("popupDetailsVerifying") + chrome.i18n.getMessage("popupStatusComputing");
     mask.style.display = 'block';
 
     try {
@@ -447,23 +447,38 @@ async function verifyFile(file, checksum, downloadId) {
             switch (checksum_type.toLowerCase().replace('-', '').replace(' ', '')) {
                 case CHECKSUM_TYPE_MD5:
                     workingHash = CryptoJS.algo.MD5.create();
+                    performance.mark("start");
                     checksum_result = await computeHash(file, workingHash);
+                    performance.mark("end");
+                    console.log("Time taken to check " +  file.size + " byte file: " + performance.measure("md5hashtime", "start", "end").duration + " milliseconds. (md5)");
                     break;
                 case CHECKSUM_TYPE_SHA1:
                     workingHash = CryptoJS.algo.SHA1.create();
+                    performance.mark("start");
                     checksum_result = await computeHash(file, workingHash);
+                    performance.mark("end");
+                    console.log("Time taken to check " +  file.size + " byte file: " + performance.measure("sha1hashtime", "start", "end").duration + " milliseconds. (sha1)");
                     break;
                 case CHECKSUM_TYPE_SHA256:
                     workingHash = CryptoJS.algo.SHA256.create();
+                    performance.mark("start");
                     checksum_result = await computeHash(file, workingHash);
+                    performance.mark("end");
+                    console.log("Time taken to check " +  file.size + " byte file: " + performance.measure("sha256hashtime", "start", "end").duration + " milliseconds. (sha256)");
                     break;
                 case CHECKSUM_TYPE_SHA384:
                     workingHash = CryptoJS.algo.SHA384.create();
+                    performance.mark("start");
                     checksum_result = await computeHash(file, workingHash);
+                    performance.mark("end");
+                    console.log("Time taken to check " +  file.size + " byte file: " + performance.measure("sha384hashtime", "start", "end").duration + " milliseconds. (sha384)");
                     break;
                 case CHECKSUM_TYPE_SHA512:
                     workingHash = CryptoJS.algo.SHA512.create();
+                    performance.mark("start");
                     checksum_result = await computeHash(file, workingHash);
+                    performance.mark("end");
+                    console.log("Time taken to check " +  file.size + " byte file: " + performance.measure("sha512hashtime", "start", "end").duration + " milliseconds. (sha512)");
                     break;
                 default:
                     console.debug("An error has occured while computing the checksum: Unknown checksum type '" + checksum_type + "'");
